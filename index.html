@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f2f4a">
+<title>池のボールタッチ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800;900&display=swap">
+<style>
+  :root {
+    --primary: #1f5b8c;
+    --accent: #538bb0;
+    --ink: #0f2f4a;
+    --yellow: #ffd23f;
+    --orange: #ff9f1c;
+    --pink: #ff6b9a;
+    --green: #2fbf71;
+    --green-dark: #1e9a58;
+    --red: #ff5a4f;
+    --card: #ffffff;
+    --text: #1e293b;
+    --sub: #64748b;
+    --border: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: "M PLUS Rounded 1c", system-ui, -apple-system, "Segoe UI", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: radial-gradient(ellipse 120% 70% at 50% 0%, #1f5b8c 0%, #0f2f4a 55%, #0a2033 100%) fixed;
+    color: #fff;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app { max-width: 860px; margin: 0 auto; padding: 14px 16px 40px; }
+
+  header { text-align: center; margin: 2px 0 12px; }
+  h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: .02em;
+    color: var(--yellow);
+    text-shadow: 0 3px 0 #b8860b, 0 6px 14px rgba(0,0,0,.4);
+  }
+  .sub { margin-top: 2px; font-size: .9rem; font-weight: 800; color: #bfe3ff; letter-spacing: .1em; }
+
+  /* 上の表示（とくてん・じかん・コンボ） */
+  .hud { display: grid; grid-template-columns: 1.1fr 1.4fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .hud-box {
+    background: rgba(255,255,255,.10);
+    border: 2px solid rgba(255,255,255,.18);
+    border-radius: 14px;
+    padding: 6px 10px 8px;
+    text-align: center;
+    min-width: 0;
+  }
+  .hud-k { font-size: .75rem; font-weight: 800; color: #bfe3ff; }
+  .hud-v { font-size: 1.9rem; font-weight: 900; line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hud-v small { font-size: .8rem; margin-left: 2px; color: #bfe3ff; }
+  .hud-v em { font-style: normal; font-size: 1.1rem; color: var(--yellow); }
+  #score { color: var(--yellow); }
+  .timebar { height: 8px; border-radius: 99px; background: rgba(255,255,255,.15); overflow: hidden; margin-top: 4px; }
+  .timebar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #4ade80, #a3e635); border-radius: 99px; transition: width .1s linear; }
+  .hud-box.hurry { border-color: var(--red); animation: hurry .5s ease-in-out infinite alternate; }
+  .hud-box.hurry .timebar i { background: linear-gradient(90deg, var(--red), var(--orange)); }
+  @keyframes hurry { from { background: rgba(255,90,79,.10); } to { background: rgba(255,90,79,.30); } }
+  .hud-box.combo-hot { border-color: var(--yellow); }
+
+  /* 池（真上から） */
+  .stage {
+    position: relative;
+    height: 460px;
+    border-radius: 18px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    cursor: pointer;
+    border: 4px solid #6b5a3e;
+    box-shadow: 0 0 0 4px #3f3424, 0 10px 30px rgba(0,0,0,.45);
+    /* WebGL が使えないときの池 */
+    background:
+      radial-gradient(ellipse 80% 70% at 50% 50%, #2f6b62 0%, #1f4d47 60%, #16352f 100%);
+  }
+  .stage::after {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 4;
+    background: transparent;
+    box-shadow: inset 0 0 24px rgba(10,25,20,.45);
+    transition: background-color .3s, box-shadow .3s;
+  }
+  .stage.rainy::after { background: rgba(20,30,50,.18); }
+  .stage.fever::after { box-shadow: inset 0 0 0 4px rgba(255,90,79,.8), inset 0 0 50px rgba(255,90,79,.55); }
+
+  .gl, .spray { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .gl { z-index: 1; }
+  .spray { z-index: 3; }
+
+  /* WebGL が使えないときだけ見せるボール（当たり判定の位置合わせにも使う） */
+  .ball {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 60px; height: 60px;
+    margin: -30px 0 0 -30px;
+    z-index: 2;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 32% 26%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 16%, transparent 30%),
+      radial-gradient(circle at 50% 50%, #4a90c8 0%, var(--primary) 55%, #123757 100%);
+    box-shadow: 0 10px 20px rgba(0,0,0,.35);
+    will-change: transform;
+  }
+  .stage.has-gl .ball { visibility: hidden; }
+
+  .msg {
+    position: absolute;
+    top: 14px; left: 0; right: 0;
+    z-index: 5;
+    text-align: center;
+    font-weight: 900;
+    font-size: 1.3rem;
+    color: #fff;
+    pointer-events: none;
+    padding: 0 12px;
+    text-shadow: 0 2px 4px rgba(0,0,0,.7), 0 0 14px rgba(0,0,0,.4);
+  }
+  .stage.idle .msg { animation: blink 1.1s steps(2, start) infinite; color: var(--yellow); font-size: 1.6rem; top: 24%; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  /* カウントダウン */
+  .countdown {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    font-size: 9rem;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -.04em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 6px 0 rgba(0,0,0,.25), 0 6px 30px rgba(0,0,0,.55);
+    opacity: 0;
+  }
+  .countdown.pop { animation: countPop .9s cubic-bezier(.2,.8,.2,1) forwards; }
+  @keyframes countPop {
+    0%   { opacity: 0; transform: scale(1.8); }
+    18%  { opacity: 1; transform: scale(1); }
+    70%  { opacity: 1; transform: scale(.94); }
+    100% { opacity: 0; transform: scale(.8); }
+  }
+  .stage.count-on::after { background: rgba(0,0,0,.18); }
+
+  /* イベントのお知らせ */
+  .banner {
+    position: absolute;
+    left: 0; right: 0; top: 26%;
+    z-index: 6;
+    text-align: center;
+    pointer-events: none;
+    font-size: 2.2rem;
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--yellow);
+    text-shadow: 0 3px 0 rgba(0,0,0,.35), 0 0 18px rgba(0,0,0,.5);
+    opacity: 0;
+  }
+  .banner small { display: block; font-size: 1.1rem; color: #fff; margin-top: 4px; }
+  .banner.show { animation: bannerPop 1.7s ease-out forwards; }
+  @keyframes bannerPop {
+    0%   { opacity: 0; transform: scale(.4) rotate(-6deg); }
+    15%  { opacity: 1; transform: scale(1.12) rotate(2deg); }
+    25%  { transform: scale(1) rotate(0); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-16px); }
+  }
+
+  /* 触った場所に出る点数 */
+  .float-pt {
+    position: absolute;
+    z-index: 6;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 1.7rem;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 2px 0 rgba(0,0,0,.35), 0 0 10px rgba(0,0,0,.45);
+    animation: floatUp 1s ease-out forwards;
+  }
+  .float-pt small { display: block; font-size: .9rem; margin-top: 2px; }
+  .float-pt.gold { color: var(--yellow); font-size: 2.2rem; }
+  .float-pt.frog { color: #a7f36b; }
+  .float-pt.miss { color: #cbd5e1; font-size: 1.05rem; }
+  @keyframes floatUp {
+    0%   { opacity: 0; transform: translate(-50%, -30%) scale(.6); }
+    15%  { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+    100% { opacity: 0; transform: translate(-50%, -170%) scale(1); }
+  }
+
+  /* 結果 */
+  .result {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: rgba(5,20,35,.55);
+    cursor: default;
+  }
+  .result-card {
+    width: min(440px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    background: #fff;
+    color: var(--text);
+    border-radius: 20px;
+    padding: 10px 16px 12px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    animation: cardIn .45s cubic-bezier(.2,.9,.3,1.3);
+  }
+  @keyframes cardIn { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .r-head { font-size: 1.2rem; font-weight: 900; color: var(--primary); }
+  .r-score { font-size: 2.8rem; font-weight: 900; line-height: 1.05; color: var(--orange); font-variant-numeric: tabular-nums; }
+  .r-score small { font-size: 1.1rem; color: var(--text); margin-left: 4px; }
+  .r-rank { margin-top: 4px; font-size: .95rem; font-weight: 800; color: var(--sub); }
+  .r-rank b { display: block; font-size: 1.5rem; color: var(--green-dark); line-height: 1.2; }
+  .r-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+  .r-stat { background: #f1f5f9; border-radius: 10px; padding: 6px 4px; }
+  .r-stat .v { font-size: 1.25rem; font-weight: 900; color: var(--primary); }
+  .r-stat .k { font-size: .7rem; font-weight: 800; color: var(--sub); }
+  .ticket {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 6px; padding: 4px 16px;
+    background: #fff4d6; border: 2px dashed var(--orange); border-radius: 10px;
+    font-weight: 900; color: #b45309;
+  }
+  .ticket b { font-size: 1.5rem; color: var(--red); }
+  .entry { margin-top: 6px; padding: 8px; border-radius: 12px; background: #ecfdf5; }
+  .entry p { margin: 0 0 6px; font-weight: 900; color: var(--green-dark); }
+  .entry form { display: flex; gap: 6px; }
+  .entry input {
+    flex: 1; min-width: 0;
+    font: inherit; font-size: 1.1rem; font-weight: 800;
+    padding: 8px 10px; border: 2px solid var(--green); border-radius: 10px;
+  }
+  .entry button { font: inherit; font-weight: 900; border: 0; border-radius: 10px; padding: 8px 14px; background: var(--green); color: #fff; cursor: pointer; }
+  .r-next { margin-top: 6px; font-size: .85rem; font-weight: 800; color: var(--sub); }
+
+  /* ボタン */
+  .controls { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; margin-top: 14px; }
+  .btn {
+    appearance: none;
+    border: 0;
+    border-radius: 16px;
+    padding: 14px 18px;
+    font-family: inherit;
+    font-size: 1.25rem;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform .08s, filter .15s;
+    min-height: 64px;
+  }
+  .btn:active { transform: translateY(3px); }
+  /* 100えん硬貨と投入口 */
+  .coinbox {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #3a4450, #252c35);
+    border: 2px solid #59636e;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.12), 0 6px 14px rgba(0,0,0,.35);
+    perspective: 500px;
+  }
+  .coinbox.shake { animation: shake .4s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+  .tray {
+    position: relative;
+    width: 86px; height: 86px; flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #1b2128, #0f1318);
+    box-shadow: inset 0 4px 10px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.12);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .coin100 {
+    position: relative;
+    width: 68px; height: 68px;
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+    z-index: 20;
+    filter: drop-shadow(0 4px 4px rgba(0,0,0,.5));
+    transition: transform .25s cubic-bezier(.3,1.4,.5,1);
+    outline: none;
+  }
+  .coin100 svg { display: block; width: 100%; height: 100%; pointer-events: none; }
+  .coin100:focus-visible { box-shadow: 0 0 0 3px var(--yellow); }
+  .coin100.dragging { cursor: grabbing; transition: none; filter: drop-shadow(0 12px 10px rgba(0,0,0,.5)); }
+  .coin100.into { transition: none; animation: coinIn .55s ease-in forwards; }
+  @keyframes coinIn {
+    0%   { transform: translate(var(--tx), var(--ty)) rotateY(0deg) scale(1); opacity: 1; }
+    40%  { transform: translate(var(--tx), var(--ty)) rotateY(88deg) scale(.95); opacity: 1; }
+    100% { transform: translate(var(--tx), calc(var(--ty) + 6px)) rotateY(88deg) scale(.55); opacity: 0; }
+  }
+  .coin100.appear { animation: coinAppear .45s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes coinAppear { from { transform: translateY(26px) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+  .coin100.nudge { animation: nudge .6s; }
+  @keyframes nudge { 30% { transform: translateX(14px) rotate(8deg); } 60% { transform: translateX(-4px); } }
+  .pull {
+    flex: none;
+    font-size: 1.6rem; font-weight: 900; color: #6b7783;
+    letter-spacing: -.1em;
+  }
+  .coinbox.hint .pull { color: var(--yellow); animation: pull 1s ease-in-out infinite; }
+  @keyframes pull { 0%, 100% { transform: translateX(-4px); opacity: .5; } 50% { transform: translateX(6px); opacity: 1; } }
+  .slot {
+    flex: none;
+    width: 74px; height: 98px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #e3e8ec, #9aa3ab 60%, #7d868e);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(0,0,0,.2), 0 4px 10px rgba(0,0,0,.4);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  }
+  .slot-hole {
+    width: 10px; height: 54px;
+    border-radius: 5px;
+    background: #050607;
+    box-shadow: inset 0 0 6px #000, 0 0 0 3px #6b737a, 0 0 0 4px #c9d0d6;
+    transition: box-shadow .15s;
+  }
+  .slot.near .slot-hole { box-shadow: inset 0 0 6px #000, 0 0 0 3px var(--yellow), 0 0 18px 4px rgba(255,210,63,.8); }
+  .slot.gulp .slot-hole { animation: gulp .5s; }
+  @keyframes gulp { 50% { box-shadow: inset 0 0 6px #000, 0 0 0 3px #fff, 0 0 24px 8px rgba(255,255,255,.9); } }
+  .slot-label { font-size: .68rem; font-weight: 900; color: #2b3640; line-height: 1.1; text-align: center; }
+  .coin-credit { flex: none; text-align: center; font-weight: 900; color: #bfe3ff; font-size: .75rem; line-height: 1.1; margin-left: 2px; }
+  .coin-credit b { display: block; font-size: 2rem; color: var(--yellow); }
+  .btn-start {
+    background: linear-gradient(180deg, #4ade80, var(--green));
+    color: #fff;
+    box-shadow: 0 5px 0 var(--green-dark);
+    text-shadow: 0 2px 0 rgba(0,0,0,.2);
+  }
+  .btn-start:active { box-shadow: 0 2px 0 var(--green-dark); }
+  .btn-start.ready { animation: ready 1s ease-in-out infinite; }
+  @keyframes ready { 50% { filter: brightness(1.15); transform: scale(1.03); } }
+  .btn:disabled { filter: grayscale(.8) brightness(.8); cursor: not-allowed; animation: none; }
+
+  .subbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; font-size: .75rem; color: #9cc3e0; }
+  .link { background: none; border: 0; padding: 4px 0; font: inherit; font-weight: 800; color: #bfe3ff; cursor: pointer; text-decoration: underline; }
+
+  /* あそびかた・ランキング */
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .panel { background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.14); border-radius: 16px; padding: 12px 14px; }
+  .panel h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 900; color: var(--yellow); display: flex; justify-content: space-between; align-items: baseline; }
+  .howto ol { margin: 0; padding-left: 1.3em; font-size: .92rem; font-weight: 800; line-height: 1.75; }
+  .howto em { font-style: normal; color: var(--yellow); }
+  .rank-list { list-style: none; margin: 0; padding: 0; }
+  .rank-list li { display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,.15); }
+  .rank-list li:last-child { border-bottom: 0; }
+  .rank-list li.none { display: block; border-bottom: 0; }
+  .rank-list li.new { background: rgba(255,210,63,.18); border-radius: 8px; }
+  .pos { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; background: rgba(255,255,255,.15); }
+  .pos.p1 { background: #ffd23f; color: #6b4500; }
+  .pos.p2 { background: #d9e2ec; color: #334155; }
+  .pos.p3 { background: #e0a46b; color: #4a2b0f; }
+  .rk-name { font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rk-name small { display: block; font-size: .7rem; color: #9cc3e0; font-weight: 800; }
+  .rk-pts { font-weight: 900; color: var(--yellow); font-variant-numeric: tabular-nums; }
+  .empty { margin: 0; font-size: .9rem; font-weight: 800; color: #9cc3e0; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 1.5rem; }
+    .hud-v { font-size: 1.4rem; }
+    .hud-v em { font-size: .9rem; }
+    .stage { height: 390px; }
+    .countdown { font-size: 7rem; }
+    .banner { font-size: 1.7rem; }
+    .btn { font-size: 1.05rem; padding: 12px 10px; }
+    .controls { grid-template-columns: 1fr; }
+    .coinbox { justify-content: space-between; }
+    .btn-start { min-height: 58px; }
+    .panels { grid-template-columns: 1fr; }
+    .r-score { font-size: 2.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>いけの ボール タッチ！</h1>
+    <div class="sub">はんしゃしんけい ゲーム</div>
+  </header>
+
+  <div class="hud">
+    <div class="hud-box"><div class="hud-k">とくてん</div><div class="hud-v" id="score">0</div></div>
+    <div class="hud-box" id="timeBox">
+      <div class="hud-k">のこり じかん</div>
+      <div class="hud-v"><span id="time">30</span><small>びょう</small></div>
+      <div class="timebar"><i id="timeBar"></i></div>
+    </div>
+    <div class="hud-box" id="comboBox"><div class="hud-k">コンボ</div><div class="hud-v"><span id="combo">0</span> <em id="mult">×1</em></div></div>
+  </div>
+
+  <div class="stage idle" id="stage" aria-live="polite">
+    <canvas class="gl" id="gl" aria-hidden="true"></canvas>
+    <div class="ball" id="ball"></div>
+    <canvas class="spray" id="spray" aria-hidden="true"></canvas>
+    <div class="msg" id="msg">100えんを いれてね</div>
+    <div class="banner" id="banner"></div>
+    <div class="countdown" id="count" aria-hidden="true"></div>
+    <div class="result hidden" id="result">
+      <div class="result-card">
+        <div class="r-head">おしまい！ きみの とくてんは…</div>
+        <div class="r-score"><span id="rScore">0</span><small>てん</small></div>
+        <div class="r-rank">きみは <b id="rTitle">-</b><span id="rNote"></span></div>
+        <div class="r-stats">
+          <div class="r-stat"><div class="v" id="rTouch">0</div><div class="k">タッチ</div></div>
+          <div class="r-stat"><div class="v" id="rCombo">0</div><div class="k">さいこう コンボ</div></div>
+          <div class="r-stat"><div class="v" id="rFast">-</div><div class="k">いちばん はやい</div></div>
+        </div>
+        <div class="ticket">チケット <b id="rTicket">1</b> まい</div>
+        <div class="entry hidden" id="entry">
+          <p id="entryMsg">ランキング 1い！ なまえを いれてね</p>
+          <form id="entryForm" autocomplete="off">
+            <input id="entryName" maxlength="6" placeholder="なまえ（6もじまで）" aria-label="なまえ">
+            <button type="submit">とうろく</button>
+          </form>
+        </div>
+        <div class="r-next" id="rNext">つぎの ひとは 100えんを いれてね</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="coinbox hint" id="coinBox">
+      <div class="tray" title="100えん">
+        <div class="coin100" id="coin" role="button" tabindex="0" aria-label="100えん こうか。コインの いれぐちまで ひっぱって いれてね">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <radialGradient id="coinFace" cx="36%" cy="30%" r="80%">
+                <stop offset="0" stop-color="#ffffff"/>
+                <stop offset=".3" stop-color="#e9ecee"/>
+                <stop offset=".7" stop-color="#b9bfc4"/>
+                <stop offset="1" stop-color="#8e959b"/>
+              </radialGradient>
+            </defs>
+            <circle cx="32" cy="32" r="31" fill="#8a9096"/>
+            <circle cx="32" cy="32" r="29.6" fill="url(#coinFace)"/>
+            <circle cx="32" cy="32" r="27.4" fill="none" stroke="#a5acb2" stroke-width="1" stroke-dasharray="1.1 1.5"/>
+            <circle cx="32" cy="32" r="25.8" fill="none" stroke="rgba(255,255,255,.7)" stroke-width=".8"/>
+            <g transform="translate(32 18)" fill="none" stroke="#9aa1a7" stroke-width="1.1">
+              <ellipse cx="0" cy="-4.2" rx="2.4" ry="3.6"/>
+              <ellipse cx="0" cy="-4.2" rx="2.4" ry="3.6" transform="rotate(72)"/>
+              <ellipse cx="0" cy="-4.2" rx="2.4" ry="3.6" transform="rotate(144)"/>
+              <ellipse cx="0" cy="-4.2" rx="2.4" ry="3.6" transform="rotate(216)"/>
+              <ellipse cx="0" cy="-4.2" rx="2.4" ry="3.6" transform="rotate(288)"/>
+            </g>
+            <text x="32" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="900" fill="#7b8288" stroke="#ffffff" stroke-width=".5" letter-spacing="-.5">100</text>
+          </svg>
+        </div>
+      </div>
+      <div class="pull" aria-hidden="true">≫</div>
+      <div class="slot" id="slot">
+        <div class="slot-hole"></div>
+        <div class="slot-label">100えん<br>いれぐち</div>
+      </div>
+      <div class="coin-credit">クレジット<b id="credit">0</b></div>
+    </div>
+    <button class="btn btn-start" id="startBtn" type="button" disabled>スタート</button>
+  </div>
+  <div class="subbar">
+    <span>※ この 100えんは おためし用です（ほんものの お金は 入りません）。こうかを つまんで いれぐちへ ひっぱってね</span>
+    <button class="link" id="soundBtn" type="button">おと：オン</button>
+  </div>
+
+  <div class="panels">
+    <section class="panel howto">
+      <h2>あそびかた</h2>
+      <ol>
+        <li>100えんを <em>いれぐち</em>へ ひっぱって、<em>スタート</em></li>
+        <li>3・2・1 の あと、ボールが うごきだすよ</li>
+        <li><em>30びょう</em>で ボールを たくさん タッチ！</li>
+        <li>つづけて タッチで <em>コンボ</em>、とくてん アップ</li>
+        <li><em>きんのボール</em>は 500てん、<em>カエル</em>は 300てん</li>
+        <li>さいごの 10びょうは とくてん <em>2ばい</em>！</li>
+      </ol>
+    </section>
+    <section class="panel">
+      <h2>きょうの ランキング <button class="link" id="clearBtn" type="button">けす</button></h2>
+      <ol class="rank-list" id="rankList"></ol>
+    </section>
+  </div>
+</div>
+
+<!-- ===== 水面シェーダー ===== -->
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+</script>
+<script id="fs" type="x-shader/x-fragment">
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes;
+uniform float uAspect;
+uniform float uTime;
+uniform sampler2D uWater;   // R,G: 水面の傾き  B: 曲率（集光）  A: 高さ
+uniform vec3 uBall;         // x, y, 半径（縦の長さを1とした座標・上向き）
+uniform float uPulse;       // 触ったときのつぶれ
+uniform float uGold;        // 金のボール 0..1
+uniform mat3 uBallRot;      // ボールの回転
+uniform vec4 uPad[3];       // 蓮の葉 x, y, 向き, 半径
+
+// 影と立体の光（左上の太陽）、水面のきらめき用の光（ほぼ真上）
+const vec3 Ls = vec3(-0.4467, 0.4963, 0.7444);
+const vec3 Lg = vec3(-0.1400, 0.1700, 0.9755);
+
+// 隣のマス目と計算順が変わっても同じ値になるよう、入力を小さく折り返してから混ぜる
+float hash(vec2 p) {
+  p = mod(p, 289.0);
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec2 hash2(vec2 p) { return vec2(hash(p), hash(p + 19.19)); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    s += a * noise(p);
+    p = mat2(1.6, 1.2, -1.2, 1.6) * p;
+    a *= 0.5;
+  }
+  return s;
+}
+
+// 水底に揺れる光の網（コースティクス）
+float caustic(vec2 uv, float t) {
+  vec2 p = uv * 6.28318 - 250.0;
+  vec2 i = p;
+  float c = 1.0;
+  float inten = 0.005;
+  for (int n = 0; n < 4; n++) {
+    float tt = t * (1.0 - (3.5 / float(n + 1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
+  }
+  c /= 4.0;
+  c = 1.17 - pow(c, 1.4);
+  return pow(abs(c), 8.0);
+}
+
+// 風のさざ波（水面の傾き）
+vec2 windGrad(vec2 p, float t) {
+  vec2 g = vec2(0.0);
+  vec2 d; float f;
+  d = vec2(0.83, 0.55);  f = 34.0; g += d * f * 0.00040 * cos(dot(d, p) * f - t * 2.3);
+  d = vec2(-0.31, 0.95); f = 47.0; g += d * f * 0.00028 * cos(dot(d, p) * f - t * 2.9);
+  d = vec2(0.97, -0.24); f = 61.0; g += d * f * 0.00020 * cos(dot(d, p) * f - t * 3.4);
+  d = vec2(-0.71, -0.70); f = 83.0; g += d * f * 0.00013 * cos(dot(d, p) * f - t * 4.1);
+  vec2 q = p * 22.0 + vec2(t * 0.35, -t * 0.22);
+  float e = 0.06;
+  float n0 = noise(q) + 0.5 * noise(q * 2.1 + 3.0);
+  float nx = noise(q + vec2(e, 0.0)) + 0.5 * noise((q + vec2(e, 0.0)) * 2.1 + 3.0);
+  float ny = noise(q + vec2(0.0, e)) + 0.5 * noise((q + vec2(0.0, e)) * 2.1 + 3.0);
+  g += vec2(nx - n0, ny - n0) / e * 0.014;
+  return g;
+}
+
+float edgeDist(vec2 p) { return min(min(p.x, uAspect - p.x), min(p.y, 1.0 - p.y)); }
+
+// 水面に映る空・雲・岸の木
+vec3 skyCol(vec3 R, vec2 p) {
+  vec2 sp = p * 0.55 + R.xy * 1.4 + vec2(uTime * 0.006, uTime * 0.002);
+  float cl = smoothstep(0.42, 0.80, fbm(sp * 2.2));
+  vec3 c = mix(vec3(0.50, 0.68, 0.90), vec3(0.96, 0.97, 1.0), cl * 0.85);
+  float tree = smoothstep(0.17, 0.03, edgeDist(p) + (fbm(p * 6.0 + R.xy * 2.0) - 0.5) * 0.10);
+  return mix(c, vec3(0.05, 0.11, 0.06), tree * 0.85);
+}
+
+// 池の底（小石・泥・藻）
+vec3 pondFloor(vec2 p) {
+  vec2 g = p * 9.0;
+  vec2 ip = floor(g), f = fract(g);
+  float best = 1e3;
+  vec2 bestR = vec2(0.0);
+  float bid = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 rn = hash2(ip + o);
+      float rad = 0.26 + 0.22 * hash(ip + o + 7.7);
+      vec2 r = o + rn * 0.6 + 0.2 - f;
+      float an = hash(ip + o + 3.1) * 6.2831;
+      float ca = cos(an), sa = sin(an);
+      vec2 rr = vec2(ca * r.x - sa * r.y, sa * r.x + ca * r.y);
+      rr.x *= 0.75 + 0.5 * rn.x;
+      float dd = length(rr) / rad;
+      if (dd < best) { best = dd; bestR = rr / rad; bid = hash(ip + o + 11.3); }
+    }
+  }
+  float n = fbm(p * 5.0);
+  vec3 silt = mix(vec3(0.30, 0.27, 0.19), vec3(0.46, 0.41, 0.30), n);
+  vec3 sc = bid < 0.25 ? vec3(0.56, 0.54, 0.50)
+          : bid < 0.50 ? vec3(0.46, 0.38, 0.29)
+          : bid < 0.75 ? vec3(0.63, 0.57, 0.45)
+          :              vec3(0.33, 0.35, 0.34);
+  sc *= 0.80 + 0.40 * fbm(p * 11.0 + bid * 10.0);
+  float b = min(best, 1.0);
+  vec3 sn = normalize(vec3(bestR * 1.3, sqrt(max(0.0, 1.0 - b * b))));
+  sc *= 0.45 + 0.7 * clamp(dot(sn, Ls), 0.0, 1.0);
+  float stone = smoothstep(1.0, 0.86, best);
+  float ao = smoothstep(1.35, 0.95, best);
+  vec3 col = mix(silt * (1.0 - 0.45 * ao), sc, stone);
+  float moss = smoothstep(0.45, 0.75, fbm(p * 1.8 + 4.0));
+  col = mix(col, col * vec3(0.55, 0.78, 0.35), moss * 0.75);
+  return col;
+}
+
+// 蓮の葉の形（切れ込みつきの円）
+float padShape(vec2 p, vec4 pd, float soft, out vec2 q, out float d, out float a) {
+  q = p - pd.xy;
+  float c = cos(pd.z), s = sin(pd.z);
+  q = vec2(c * q.x + s * q.y, -s * q.x + c * q.y);
+  d = length(q);
+  a = atan(q.y, q.x + 1e-6);
+  float rad = pd.w * (1.0 + 0.02 * sin(a * 5.0 + pd.w * 40.0));
+  float m = smoothstep(rad + soft, rad - soft, d);
+  float aw = soft / max(d, 1e-3);
+  float wedge = smoothstep(0.16 + aw, 0.16 - aw, abs(a));
+  m *= 1.0 - wedge * smoothstep(pd.w * 0.02, pd.w * 0.06, d);
+  return m;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec2 p = vec2(uv.x * uAspect, uv.y);
+  float px = 1.0 / uRes.y;
+
+  // ---- 水面の形 ----
+  vec4 w = texture2D(uWater, vec2(uv.x, 1.0 - uv.y));
+  vec2 sl = (w.xy * 2.0 - 1.0) * 0.55;
+  float lap = w.z * 2.0 - 1.0;
+  vec3 N = normalize(vec3(-(sl + windGrad(p, uTime)), 1.0));
+
+  // ---- 深さ（真ん中は深く、岸は浅い） ----
+  float edge = edgeDist(p);
+  float depth = 0.5 + 0.5 * smoothstep(0.25, 0.75, fbm(p * 1.1 + 2.0));
+  depth *= mix(0.45, 1.0, smoothstep(0.0, 0.3, edge));
+
+  // ---- 屈折して見える水底 ----
+  vec2 fp = p - N.xy * depth * 0.09;
+  vec3 fl = pondFloor(fp);
+
+  float ca = caustic(fp * 0.9 + N.xy * 0.06, uTime * 0.45);
+  float cb = caustic(fp * 1.3 + vec2(0.3, 0.7) - N.xy * 0.05, uTime * 0.38 + 1.3);
+  float caus = ca * 0.6 + cb * 0.4;
+  fl *= 0.68 + caus * 2.6 * exp(-depth * 0.5) + clamp(-lap, -0.4, 1.0) * 1.1;
+
+  // ---- 水底に落ちる影（ボール・葉） ----
+  vec2 sOff = -Ls.xy / Ls.z;
+  float fd = depth * 0.10;
+  vec2 bs = uBall.xy + sOff * (fd + uBall.z * 0.45);
+  float sh = (1.0 - smoothstep(uBall.z * 0.55, uBall.z * 1.35 + fd * 0.4, length(fp - bs))) * 0.6;
+  vec2 tq; float td; float ta;
+  for (int k = 0; k < 3; k++) {
+    float pm = padShape(fp - sOff * fd, uPad[k], 0.012 + fd * 0.08, tq, td, ta);
+    sh = max(sh, pm * 0.5);
+  }
+  fl *= 1.0 - sh;
+
+  // ---- 水の色（赤が先に吸われて緑がかる） ----
+  vec3 absorb = exp(-vec3(1.7, 0.65, 0.75) * depth * 0.75);
+  vec3 col = fl * absorb + vec3(0.03, 0.15, 0.13) * (1.0 - absorb);
+  col = mix(col, vec3(0.10, 0.24, 0.19), 0.10 * depth);
+
+  // ---- 水面の反射ときらめき ----
+  vec3 R = reflect(vec3(0.0, 0.0, -1.0), N);
+  float fres = 0.02 + 0.98 * pow(1.0 - max(N.z, 0.0), 5.0);
+  col = mix(col, skyCol(R, p), clamp(0.15 + fres * 6.0, 0.0, 0.7));
+  float sp = max(dot(R, Lg), 0.0);
+  col += vec3(1.0, 0.97, 0.88) * (pow(sp, 2500.0) * 2.5 + pow(sp, 300.0) * 0.12);
+
+  // ---- 蓮の葉 ----
+  for (int k = 0; k < 3; k++) {
+    vec4 pd = uPad[k];
+    vec2 q; float d; float a;
+    float m = padShape(p + N.xy * 0.004, pd, px * 1.2, q, d, a);
+    float ring = exp(-pow((d - pd.w) / (px * 3.0 + pd.w * 0.04), 2.0)) * (1.0 - m);
+    col *= 1.0 - ring * 0.35;
+    if (m > 0.0) {
+      float nn = fbm(q / pd.w * 3.0 + pd.xy * 10.0);
+      vec3 g = mix(vec3(0.15, 0.33, 0.11), vec3(0.30, 0.50, 0.17), nn);
+      float vein = smoothstep(0.08, 0.0, abs(sin(a * 9.0))) * smoothstep(pd.w * 0.95, pd.w * 0.15, d);
+      g = mix(g, vec3(0.42, 0.60, 0.26), vein * 0.35);
+      g *= 1.0 - smoothstep(pd.w * 0.05, 0.0, d) * 0.2;
+      float rim = smoothstep(pd.w * 0.80, pd.w * 0.97, d);
+      g *= 1.0 - rim * 0.28;
+      g += vec3(0.10, 0.12, 0.05) * smoothstep(pd.w * 0.93, pd.w, d);
+      vec3 pn = normalize(vec3(q / pd.w * 0.35 + N.xy * 0.6, 1.0));
+      vec3 Rp = reflect(vec3(0.0, 0.0, -1.0), pn);
+      g *= 0.75 + 0.35 * clamp(dot(pn, Ls), 0.0, 1.0);
+      g += vec3(0.9, 0.95, 0.85) * pow(max(dot(Rp, Ls), 0.0), 40.0) * 0.25;
+      col = mix(col, g, m);
+    }
+  }
+
+  // ---- ボール（半分沈んで浮かぶ球） ----
+  float r = uBall.z * (1.0 + uPulse);
+  vec2 qb = p - uBall.xy;
+  float db = length(qb);
+  float rc = r * 0.92;
+  // 水中に沈んだ部分（屈折して少しゆがむ）
+  float under = smoothstep(r + px, r - px, length(qb + N.xy * 0.012));
+  col = mix(col, col * 0.35 + vec3(0.03, 0.12, 0.22), under * 0.8);
+  // 水に映るボールの暗い影と、水際の光る縁
+  col *= 1.0 - smoothstep(r * 1.45, rc, db) * (1.0 - under) * 0.25;
+  col += vec3(0.85, 0.92, 0.95) * exp(-pow((db - rc) / (px * 1.4 + r * 0.035), 2.0)) * 0.45;
+  // 金のボールのまわりの光
+  col += vec3(1.0, 0.82, 0.30) * uGold * exp(-pow((db - r * 1.3) / (r * 0.38), 2.0)) * (0.45 + 0.2 * sin(uTime * 10.0));
+  if (db < rc + px) {
+    vec2 nq = qb / r;
+    vec3 ns = vec3(nq, sqrt(max(0.0, 1.0 - dot(nq, nq))));
+    vec3 o = ns * uBallRot;
+    vec3 base = mix(vec3(0.08, 0.30, 0.55), vec3(0.88, 0.62, 0.10), uGold);
+    float band = smoothstep(0.21, 0.17, abs(o.z));
+    float spot = smoothstep(0.38, 0.34, length(o - vec3(0.0, 0.0, 1.0)));
+    base = mix(base, mix(vec3(0.93, 0.94, 0.92), vec3(1.0, 0.93, 0.6), uGold), max(band, spot));
+    vec3 c = base * (0.30 + 0.25 * ns.z + 0.85 * clamp(dot(ns, Ls), 0.0, 1.0));
+    vec3 Rb = reflect(vec3(0.0, 0.0, -1.0), ns);
+    float fr = 0.04 + 0.96 * pow(1.0 - ns.z, 5.0);
+    c = mix(c, skyCol(Rb, p), fr * 0.55);
+    c += vec3(1.0) * (pow(max(dot(Rb, Ls), 0.0), 90.0) * 1.3 + pow(max(dot(Rb, Ls), 0.0), 10.0) * 0.10);
+    c *= mix(0.55, 1.0, smoothstep(rc, rc * 0.72, db));
+    col = mix(col, c, smoothstep(rc + px, rc - px, db));
+  }
+
+  // ---- 岸の陰 ----
+  col *= mix(0.62, 1.0, smoothstep(0.0, 0.10, edge));
+
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var GAME_TIME = 30;       // 1かいの あそび時間（秒）
+  var FEVER_TIME = 10;      // のこり何秒から とくてん 2ばい
+  var GOLD_TIME = 3.5;      // きんのボールが 光っている時間（秒）
+  var BALL_R = 30;
+  var HIT_TOLERANCE = 22;   // px  ボールの縁からこの距離まではタッチ成功
+  var HIT_LAG = 120;        // ms  指が触れてから反応するまでの遅れの分、少し前の位置も当たりにする
+  var RANK_KEY = 'reflex-ball-ranking-v1';
+  var RANK_MAX = 5;
+  var COUNT_FROM = 3;       // カウントダウンの最初の数
+  var COUNT_STEP = 900;     // ms  1つの数を出している時間
+
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), glCanvas = $('gl'), sprayCanvas = $('spray');
+  var sctx = sprayCanvas.getContext('2d');
+  var ball = $('ball'), msg = $('msg'), countEl = $('count'), bannerEl = $('banner');
+  var scoreEl = $('score'), timeEl = $('time'), timeBar = $('timeBar'), timeBox = $('timeBox');
+  var comboEl = $('combo'), multEl = $('mult'), comboBox = $('comboBox'), creditEl = $('credit');
+  var coinEl = $('coin'), coinBox = $('coinBox'), slotEl = $('slot'), startBtn = $('startBtn'), soundBtn = $('soundBtn'), clearBtn = $('clearBtn');
+  var resultEl = $('result'), rScore = $('rScore'), rTitle = $('rTitle'), rNote = $('rNote');
+  var rTouch = $('rTouch'), rCombo = $('rCombo'), rFast = $('rFast'), rTicket = $('rTicket'), rNext = $('rNext');
+  var entryEl = $('entry'), entryMsg = $('entryMsg'), entryForm = $('entryForm'), entryName = $('entryName');
+  var rankList = $('rankList');
+
+  // state: idle | count | go | done （この名前はステージの class にもなる）
+  var state = 'idle';
+  var credits = 0, score = 0, combo = 0, maxCombo = 0, touchN = 0, missN = 0, fastest = Infinity;
+  var timeLeft = GAME_TIME, feverOn = false, goldLeft = 0, goldVis = 0, rainLeft = 0, rainAcc = 0;
+  var events = [], pendingEntry = null, idleFrogT = 4;
+  var delayTimer = null;
+  var pauseTimer = null;
+  var markTime = 0;
+  var x = 0, y = 0, vx = 0, vy = 0;   // ボール（ステージ中央からの px）
+  var hitAt = -10;                    // 触った時刻（つぶれ演出用、秒）
+  var rot = [1, 0, 0, 0, 1, 0, 0, 0, 1]; // ボールの回転（行優先 3x3）
+
+  var cw = 0, ch = 0;
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+
+  // =====================================================
+  //  水面の波（高さの格子で波動方程式を解く）
+  // =====================================================
+  var GW = 0, GH = 0, cur = null, prev = null, texData = null;
+  var SIM_RATE = 150;      // 1秒あたりの計算回数
+  var DAMP = 0.988;        // 波の減衰
+  var simAcc = 0;
+
+  function initSim() {
+    GW = cw < 520 ? 150 : 210;
+    GH = Math.max(40, Math.round(GW * ch / cw));
+    cur = new Float32Array(GW * GH);
+    prev = new Float32Array(GW * GH);
+    texData = new Uint8Array(GW * GH * 4);
+  }
+  // 水面を押す（s>0 で盛り上げ、s<0 でへこませる）
+  function addDrop(pxX, pxY, radPx, s) {
+    if (!cur) return;
+    var gx = pxX / cw * GW, gy = pxY / ch * GH;
+    var gr = Math.max(1.5, radPx / cw * GW);
+    var x0 = Math.max(1, Math.floor(gx - gr)), x1 = Math.min(GW - 2, Math.ceil(gx + gr));
+    var y0 = Math.max(1, Math.floor(gy - gr)), y1 = Math.min(GH - 2, Math.ceil(gy + gr));
+    for (var yy = y0; yy <= y1; yy++) {
+      for (var xx = x0; xx <= x1; xx++) {
+        var d = Math.sqrt((xx - gx) * (xx - gx) + (yy - gy) * (yy - gy)) / gr;
+        if (d < 1) cur[yy * GW + xx] += s * (0.5 + 0.5 * Math.cos(Math.PI * d));
+      }
+    }
+  }
+  // 物が水を押しのけて進む（前が盛り上がり、後ろがへこむ）
+  function plow(ox, oy, nx, ny, radPx, s) {
+    addDrop(ox, oy, radPx, s);
+    addDrop(nx, ny, radPx, -s);
+  }
+  function simStep() {
+    var W = GW, H = GH, c = cur, p = prev, xx, yy, i;
+    for (yy = 1; yy < H - 1; yy++) {
+      i = yy * W + 1;
+      for (xx = 1; xx < W - 1; xx++, i++) {
+        p[i] = ((c[i - 1] + c[i + 1] + c[i - W] + c[i + W]) * 0.5 - p[i]) * DAMP;
+      }
+    }
+    for (xx = 0; xx < W; xx++) { p[xx] = p[xx + W]; p[(H - 1) * W + xx] = p[(H - 2) * W + xx]; }
+    for (yy = 0; yy < H; yy++) { p[yy * W] = p[yy * W + 1]; p[yy * W + W - 1] = p[yy * W + W - 2]; }
+    cur = p; prev = c;
+  }
+  function encodeSim() {
+    var W = GW, H = GH, c = cur, t = texData, xx, yy, i, j, l, r, u, d, h, v;
+    for (yy = 0; yy < H; yy++) {
+      for (xx = 0; xx < W; xx++) {
+        i = yy * W + xx; j = i * 4;
+        h = c[i];
+        l = xx > 0 ? c[i - 1] : h;  r = xx < W - 1 ? c[i + 1] : h;
+        u = yy > 0 ? c[i - W] : h;  d = yy < H - 1 ? c[i + W] : h;
+        v = (r - l) * 1.5 * 127.5 + 127.5;          t[j] = v < 0 ? 0 : v > 255 ? 255 : v;
+        v = (u - d) * 1.5 * 127.5 + 127.5;          t[j + 1] = v < 0 ? 0 : v > 255 ? 255 : v;
+        v = (l + r + u + d - 4 * h) * 3 * 127.5 + 127.5; t[j + 2] = v < 0 ? 0 : v > 255 ? 255 : v;
+        v = h * 0.5 * 127.5 + 127.5;                t[j + 3] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+    }
+  }
+
+  // =====================================================
+  //  WebGL
+  // =====================================================
+  var GL = null;
+  function initGL() {
+    var gl = glCanvas.getContext('webgl', { antialias: false, alpha: false, premultipliedAlpha: false });
+    if (!gl) return null;
+    function sh(type, src) {
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
+    }
+    var vs = sh(gl.VERTEX_SHADER, document.getElementById('vs').textContent);
+    var fs = sh(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent);
+    if (!vs || !fs) return null;
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    var U = {};
+    ['uRes', 'uAspect', 'uTime', 'uWater', 'uBall', 'uPulse', 'uGold', 'uBallRot', 'uPad'].forEach(function (n) {
+      U[n] = gl.getUniformLocation(prog, n);
+    });
+    gl.uniform1i(U.uWater, 0);
+    return { gl: gl, U: U, tex: tex, texW: 0, texH: 0 };
+  }
+
+  // =====================================================
+  //  蓮の葉
+  // =====================================================
+  var pads = [];
+  function initPads() {
+    var s = ch;
+    pads = [
+      { x: cw * 0.13, y: ch * 0.26, a: 0.6, s: s * 0.105, vx: 0, vy: 0, va: 0.02 },
+      { x: cw * 0.85, y: ch * 0.74, a: 2.4, s: s * 0.088, vx: 0, vy: 0, va: -0.015 },
+      { x: cw * 0.80, y: ch * 0.20, a: 4.1, s: s * 0.062, vx: 0, vy: 0, va: 0.01 }
+    ];
+  }
+  function updatePads(dt, sec) {
+    var bx = cw / 2 + x, by = ch / 2 + y;
+    var bsp = Math.sqrt(vx * vx + vy * vy);
+    for (var i = 0; i < pads.length; i++) {
+      var p = pads[i];
+      var ox = p.x, oy = p.y;
+      // ゆるい水の流れ
+      p.vx += (Math.sin(sec * 0.13 + i * 2.1) * 4 - p.vx) * 0.9 * dt;
+      p.vy += (Math.cos(sec * 0.11 + i * 1.3) * 3 - p.vy) * 0.9 * dt;
+      // ボールに押される
+      var dx = p.x - bx, dy = p.y - by;
+      var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      var minD = BALL_R + p.s * 0.92;
+      if (dist < minD) {
+        var nx = dx / dist, ny = dy / dist;
+        p.x += nx * (minD - dist);
+        p.y += ny * (minD - dist);
+        p.vx += nx * bsp * 0.035;
+        p.vy += ny * bsp * 0.035;
+        p.va += rnd(-1, 1) * 0.6;
+      }
+      // 葉どうし
+      for (var k = 0; k < pads.length; k++) {
+        if (k === i) continue;
+        var q = pads[k];
+        var ex = p.x - q.x, ey = p.y - q.y;
+        var ed = Math.sqrt(ex * ex + ey * ey) || 1;
+        var md = (p.s + q.s) * 0.95;
+        if (ed < md) { p.x += ex / ed * (md - ed) * 0.5; p.y += ey / ed * (md - ed) * 0.5; }
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.a += p.va * dt;
+      p.va -= p.va * 0.8 * dt;
+      if (p.x < p.s) { p.x = p.s; p.vx = Math.abs(p.vx); }
+      if (p.x > cw - p.s) { p.x = cw - p.s; p.vx = -Math.abs(p.vx); }
+      if (p.y < p.s) { p.y = p.s; p.vy = Math.abs(p.vy); }
+      if (p.y > ch - p.s) { p.y = ch - p.s; p.vy = -Math.abs(p.vy); }
+      var mv = Math.sqrt((p.x - ox) * (p.x - ox) + (p.y - oy) * (p.y - oy));
+      if (mv > 0.4) plow(ox, oy, p.x, p.y, p.s * 0.8, Math.min(mv * 0.04, 0.3));
+    }
+  }
+
+  // =====================================================
+  //  しぶき（空中に飛ぶ水滴）
+  // =====================================================
+  var drops = [];
+  function sprayAt(px, py, n, power, dirx, diry) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.atan2(diry || 0, dirx || 0) + (dirx || diry ? rnd(-1.1, 1.1) : rnd(-Math.PI, Math.PI));
+      var s = rnd(60, 220) * power;
+      drops.push({ x: px + rnd(-6, 6), y: py + rnd(-6, 6), z: rnd(2, 8), vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+                   vz: rnd(160, 380) * power, r: rnd(1.3, 3.4) });
+    }
+  }
+  function updateDrops(dt) {
+    for (var i = drops.length - 1; i >= 0; i--) {
+      var d = drops[i];
+      d.vz -= 980 * dt;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+      if (d.z <= 0) {
+        addDrop(d.x, d.y, 3 + d.r * 1.5, 0.18 + d.r * 0.08);
+        drops.splice(i, 1);
+      }
+    }
+  }
+  function drawDrops() {
+    sctx.clearRect(0, 0, cw, ch);
+    drawFrog();
+    drawSparkles(performance.now() / 1000);
+    var i, d;
+    for (i = 0; i < drops.length; i++) {
+      d = drops[i];
+      sctx.beginPath();
+      sctx.ellipse(d.x + d.z * 0.35, d.y + d.z * 0.4, d.r * 1.1, d.r * 0.9, 0, 0, Math.PI * 2);
+      sctx.fillStyle = 'rgba(0,20,15,0.18)';
+      sctx.fill();
+    }
+    for (i = 0; i < drops.length; i++) {
+      d = drops[i];
+      var r = d.r * (1 + d.z / 160);
+      var cx = d.x, cy = d.y - d.z * 0.2;
+      var g = sctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, 0, cx, cy, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.45, 'rgba(210,235,245,0.55)');
+      g.addColorStop(1, 'rgba(150,200,215,0.15)');
+      sctx.beginPath();
+      sctx.arc(cx, cy, r, 0, Math.PI * 2);
+      sctx.fillStyle = g;
+      sctx.fill();
+    }
+  }
+
+  // =====================================================
+  //  サイズ
+  // =====================================================
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;                       // まだ表示されていない
+    if (w === cw && h === ch && cur) return;
+    cw = w;
+    ch = h;
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    if (GL) {
+      glCanvas.width = Math.round(cw * dpr);
+      glCanvas.height = Math.round(ch * dpr);
+      GL.gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+    }
+    var sd = Math.min(window.devicePixelRatio || 1, 2);
+    sprayCanvas.width = Math.round(cw * sd);
+    sprayCanvas.height = Math.round(ch * sd);
+    sctx.setTransform(sd, 0, 0, sd, 0, 0);
+    initSim();
+    if (!pads.length) initPads();
+  }
+
+  // =====================================================
+  //  ボール
+  // =====================================================
+  function setState(s) {
+    state = s;
+    // 注意: キャンバスの class「gl」と同じ名前を付けると、池の枠が画面全体に広がりタッチも効かなくなる
+    stage.className = 'stage ' + s + (GL ? ' has-gl' : '');
+  }
+  function clearTimers() {
+    if (delayTimer) { clearTimeout(delayTimer); delayTimer = null; }
+    if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
+  }
+  var trail = [];   // 直前のボール位置 [時刻ms, 中心x, 中心y]
+  function placeBall() {
+    ball.style.transform = 'translate(' + x.toFixed(1) + 'px, ' + y.toFixed(1) + 'px)';
+    var now = performance.now();
+    trail.push([now, cw / 2 + x, ch / 2 + y]);
+    while (trail.length && now - trail[0][0] > HIT_LAG) trail.shift();
+  }
+  // 今の位置か、少し前にいた位置のどれかに触れていれば当たり
+  function touchesBall(px, py) {
+    var lim = BALL_R + HIT_TOLERANCE, now = performance.now();
+    var pts = trail.concat([[now, cw / 2 + x, ch / 2 + y]]);
+    for (var i = 0; i < pts.length; i++) {
+      if (now - pts[i][0] > HIT_LAG) continue;
+      var dx = pts[i][1] - px, dy = pts[i][2] - py;
+      if (dx * dx + dy * dy <= lim * lim) return true;
+    }
+    return false;
+  }
+  function resetBall() {
+    var ox = cw / 2 + x, oy = ch / 2 + y;
+    x = 0; y = 0; vx = 0; vy = 0;
+    if (Math.abs(ox - cw / 2) > 1 || Math.abs(oy - ch / 2) > 1) {
+      addDrop(ox, oy, BALL_R, 0.6);         // 元の場所の水が戻る
+      addDrop(cw / 2, ch / 2, BALL_R, -0.6); // 中央にそっと置かれる
+    }
+    placeBall();
+  }
+  function rollBall(dt) {
+    var sp = Math.sqrt(vx * vx + vy * vy);
+    if (sp < 1) return;
+    // 画面上向きを +y とした座標で回転軸を求める
+    var kx = vy / sp, ky = vx / sp;           // 軸 = (-vy_up, vx, 0) / |v|、vy_up = -vy
+    var th = sp * dt / BALL_R;
+    var c = Math.cos(th), s = Math.sin(th), t = 1 - c;
+    var R = [
+      t * kx * kx + c,  t * kx * ky,       s * ky,
+      t * kx * ky,      t * ky * ky + c,  -s * kx,
+      -s * ky,          s * kx,            c
+    ];
+    var m = rot, n = new Array(9);
+    for (var r = 0; r < 3; r++) for (var q = 0; q < 3; q++) {
+      n[r * 3 + q] = R[r * 3] * m[q] + R[r * 3 + 1] * m[3 + q] + R[r * 3 + 2] * m[6 + q];
+    }
+    // ずれ防止の正規直交化
+    var a0 = [n[0], n[3], n[6]], a1 = [n[1], n[4], n[7]];
+    var l0 = Math.hypot(a0[0], a0[1], a0[2]); a0 = a0.map(function (v) { return v / l0; });
+    var dp = a0[0] * a1[0] + a0[1] * a1[1] + a0[2] * a1[2];
+    a1 = [a1[0] - dp * a0[0], a1[1] - dp * a0[1], a1[2] - dp * a0[2]];
+    var l1 = Math.hypot(a1[0], a1[1], a1[2]); a1 = a1.map(function (v) { return v / l1; });
+    var a2 = [a0[1] * a1[2] - a0[2] * a1[1], a0[2] * a1[0] - a0[0] * a1[2], a0[0] * a1[1] - a0[1] * a1[0]];
+    rot = [a0[0], a1[0], a2[0], a0[1], a1[1], a2[1], a0[2], a1[2], a2[2]];
+  }
+  function stepBall(dt) {
+    var ox = cw / 2 + x, oy = ch / 2 + y;
+    x += vx * dt;
+    y += vy * dt;
+    var maxX = cw / 2 - BALL_R - 4;
+    var maxY = ch / 2 - BALL_R - 4;
+    var cx = cw / 2, cy = ch / 2;
+    if (x > maxX) { x = maxX; vx = -Math.abs(vx); wallSplash(cx + maxX + BALL_R, cy + y, -1, 0); }
+    if (x < -maxX) { x = -maxX; vx = Math.abs(vx); wallSplash(cx - maxX - BALL_R, cy + y, 1, 0); }
+    if (y > maxY) { y = maxY; vy = -Math.abs(vy); wallSplash(cx + x, cy + maxY + BALL_R, 0, -1); }
+    if (y < -maxY) { y = -maxY; vy = Math.abs(vy); wallSplash(cx + x, cy - maxY - BALL_R, 0, 1); }
+    plow(ox, oy, cw / 2 + x, ch / 2 + y, BALL_R * 0.85, 0.9);
+    rollBall(dt);
+    placeBall();
+  }
+  function wallSplash(px, py, nx, ny) {
+    addDrop(px, py, 18, 1.1);
+    sprayAt(px, py, 8, 0.8, nx, ny);
+  }
+
+  var prevT = 0, nextAmbient = 1.5;
+  function loop(t) {
+    var dt = prevT ? Math.min((t - prevT) / 1000, 0.05) : 0;
+    prevT = t;
+    var sec = t / 1000;
+    if (!cur) { resize(); requestAnimationFrame(loop); return; }
+
+    if (state === 'go') { stepBall(dt); gameTick(dt); }
+    updatePads(dt, sec);
+    updateDrops(dt);
+    updateFrog(dt);
+
+    // きんのボール
+    if (goldLeft > 0) goldLeft = Math.max(0, goldLeft - dt);
+    goldVis += ((goldLeft > 0 ? 1 : 0) - goldVis) * Math.min(1, dt * 8);
+    if (goldVis < 0.01) goldVis = 0;
+
+    // 雨
+    if (rainLeft > 0) {
+      rainLeft -= dt;
+      rainAcc += dt * 70;
+      while (rainAcc >= 1) { rainAcc -= 1; addDrop(rnd(4, cw - 4), rnd(4, ch - 4), rnd(2.5, 4.5), rnd(0.35, 0.7)); }
+      if (rainLeft <= 0) stage.classList.remove('rainy');
+    }
+
+    // 待っている間もカエルが遊びに来る（点数なし）
+    if ((state === 'idle' || state === 'done') && !frog) {
+      idleFrogT -= dt;
+      if (idleFrogT <= 0) { idleFrogT = rnd(7, 12); spawnFrog(); }
+    }
+
+    // ときどき虫や小雨のような小さな波紋（ボールの近くは避ける）
+    nextAmbient -= dt;
+    if (nextAmbient <= 0) {
+      nextAmbient = rnd(1.2, 3.2);
+      var ax = rnd(20, cw - 20), ay = rnd(20, ch - 20);
+      var bx = cw / 2 + x, by = ch / 2 + y;
+      if (Math.hypot(ax - bx, ay - by) > 120) addDrop(ax, ay, 4, 0.35);
+    }
+
+    simAcc += dt * SIM_RATE;
+    var n = 0;
+    while (simAcc >= 1 && n < 8) { simStep(); simAcc -= 1; n++; }
+    if (n >= 8) simAcc = 0;
+
+    if (GL) renderGL(sec);
+    drawDrops();
+    requestAnimationFrame(loop);
+  }
+
+  function renderGL(sec) {
+    var gl = GL.gl, U = GL.U;
+    encodeSim();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, GL.tex);
+    if (GL.texW !== GW || GL.texH !== GH) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, GW, GH, 0, gl.RGBA, gl.UNSIGNED_BYTE, texData);
+      GL.texW = GW; GL.texH = GH;
+    } else {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GW, GH, gl.RGBA, gl.UNSIGNED_BYTE, texData);
+    }
+    gl.uniform2f(U.uRes, glCanvas.width, glCanvas.height);
+    gl.uniform1f(U.uAspect, cw / ch);
+    gl.uniform1f(U.uTime, sec % 1000);
+    gl.uniform3f(U.uBall, (cw / 2 + x) / ch, 1 - (ch / 2 + y) / ch, BALL_R / ch);
+    var ht = sec - hitAt;
+    gl.uniform1f(U.uPulse, ht < 0.6 ? Math.exp(-ht * 9) * Math.sin(ht * 34) * 0.12 : 0);
+    gl.uniformMatrix3fv(U.uBallRot, false, new Float32Array([rot[0], rot[3], rot[6], rot[1], rot[4], rot[7], rot[2], rot[5], rot[8]]));
+    var pd = new Float32Array(12);
+    for (var i = 0; i < 3; i++) {
+      var p = pads[i];
+      pd[i * 4] = p.x / ch; pd[i * 4 + 1] = 1 - p.y / ch; pd[i * 4 + 2] = -p.a; pd[i * 4 + 3] = p.s / ch;
+    }
+    gl.uniform4fv(U.uPad, pd);
+    gl.uniform1f(U.uGold, goldVis);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // =====================================================
+  //  カエル（葉の上にいて、葉から葉へ跳ぶ。タッチで 300 てん）
+  // =====================================================
+  var frog = null;
+  function frogScale() { return ch / 460 * 1.15; }
+  function padSeat(i) { var p = pads[i]; return { x: p.x, y: p.y - p.s * 0.05 }; }
+  function frogPos() { return frog ? { x: frog.x, y: frog.y - frog.z * 0.25 } : null; }
+  function spawnFrog() {
+    // ボールから一番遠い葉に、水の中から跳び乗る
+    var bx = cw / 2 + x, by = ch / 2 + y, bi = 0, bd = -1;
+    for (var i = 0; i < pads.length; i++) {
+      var d = Math.hypot(pads[i].x - bx, pads[i].y - by);
+      if (d > bd) { bd = d; bi = i; }
+    }
+    var st = padSeat(bi), a = rnd(0, Math.PI * 2), r = pads[bi].s * 1.9;
+    var fx = Math.min(cw - 10, Math.max(10, st.x + Math.cos(a) * r));
+    var fy = Math.min(ch - 10, Math.max(10, st.y + Math.sin(a) * r));
+    frog = { x: fx, y: fy, z: 0, ang: 0, pad: -1, sit: 0, hops: 1, caught: false };
+    addDrop(fx, fy, 12, -0.9);   // 水から顔を出す
+    frogJump(fx, fy, bi, 40);
+  }
+  function frogJump(fx, fy, toPad, peak) {
+    frog.phase = 'jump';
+    frog.fromX = fx; frog.fromY = fy;
+    frog.toPad = toPad;
+    frog.t = 0; frog.dur = toPad >= 0 ? 0.6 : 0.5;
+    frog.peak = (peak || 70) * frogScale();
+    frog.pad = -1;
+  }
+  function frogDive() {
+    if (!frog) return;
+    // 葉のない水面へ飛び込んで帰る
+    var tx = frog.x, ty = frog.y;
+    for (var k = 0; k < 12; k++) {
+      var a = rnd(0, Math.PI * 2), d = rnd(80, 140);
+      tx = Math.min(cw - 20, Math.max(20, frog.x + Math.cos(a) * d));
+      ty = Math.min(ch - 20, Math.max(20, frog.y + Math.sin(a) * d));
+      var onPad = pads.some(function (p) { return Math.hypot(p.x - tx, p.y - ty) < p.s * 1.1; });
+      if (!onPad) break;
+    }
+    frogJump(frog.x, frog.y, -1, 50);
+    frog.toX = tx; frog.toY = ty;
+  }
+  function updateFrog(dt) {
+    if (!frog) return;
+    var f = frog;
+    if (f.phase === 'sit') {
+      var s = padSeat(f.pad);
+      f.x = s.x; f.y = s.y; f.z = 0;
+      f.sit -= dt;
+      if (f.sit <= 0) {
+        if (f.hops > 0) {
+          f.hops--;
+          var ni = (f.pad + 1 + Math.floor(Math.random() * (pads.length - 1))) % pads.length;
+          frogJump(f.x, f.y, ni);
+        } else {
+          frogDive();
+        }
+      }
+      return;
+    }
+    f.t += dt;
+    var u = Math.min(1, f.t / f.dur);
+    var tx, ty;
+    if (f.toPad >= 0) { var seat = padSeat(f.toPad); tx = seat.x; ty = seat.y; } else { tx = f.toX; ty = f.toY; }
+    f.x = f.fromX + (tx - f.fromX) * u;
+    f.y = f.fromY + (ty - f.fromY) * u;
+    f.z = Math.sin(Math.PI * u) * f.peak;
+    if (Math.hypot(tx - f.fromX, ty - f.fromY) > 2) f.ang = Math.atan2(ty - f.fromY, tx - f.fromX) + Math.PI / 2;
+    if (u >= 1) {
+      if (f.toPad >= 0) {
+        f.phase = 'sit'; f.pad = f.toPad; f.sit = rnd(1.8, 2.6); f.z = 0;
+        var p = pads[f.pad];
+        p.vx += (tx - f.fromX) * 0.06; p.vy += (ty - f.fromY) * 0.06; p.va += rnd(-0.4, 0.4);
+        addDrop(f.x, f.y, p.s * 0.6, 0.5);   // 乗った葉が沈む
+      } else {
+        addDrop(f.x, f.y, 14, -1.4);          // ぽちゃん
+        sprayAt(f.x, f.y, 10, 0.7);
+        frog = null;
+      }
+    }
+  }
+  function frogHit(px, py) {
+    if (!frog || frog.caught || (frog.phase === 'jump' && frog.toPad < 0)) return false;
+    var fp = frogPos();
+    return Math.hypot(fp.x - px, fp.y - py) < 30 * frogScale();
+  }
+  function ell(c, cx, cy, rx, ry, rot, fill) {
+    c.beginPath(); c.ellipse(cx, cy, rx, ry, rot || 0, 0, Math.PI * 2); c.fillStyle = fill; c.fill();
+  }
+  function drawFrog() {
+    if (!frog) return;
+    var f = frog, k = frogScale() * (1 + f.z / 140), c = sctx;
+    // 影
+    ell(c, f.x + f.z * 0.35 + 2, f.y + f.z * 0.4 + 3, 13 * frogScale(), 11 * frogScale(), 0, 'rgba(0,20,10,' + (f.z > 2 ? 0.22 : 0.3) + ')');
+    c.save();
+    c.translate(f.x, f.y - f.z * 0.25);
+    c.rotate(f.ang);
+    c.scale(k, k);
+    var leg = f.z > 4 ? 1.35 : 1;   // 跳んでいる間は脚を伸ばす
+    ell(c, -10, 10 * leg, 5, 10 * leg, -0.5, '#3d8b37');
+    ell(c, 10, 10 * leg, 5, 10 * leg, 0.5, '#3d8b37');
+    ell(c, -13, 18 * leg, 4, 3, 0, '#5fae4e');
+    ell(c, 13, 18 * leg, 4, 3, 0, '#5fae4e');
+    ell(c, -10, -4, 3, 7, 0.6, '#3d8b37');
+    ell(c, 10, -4, 3, 7, -0.6, '#3d8b37');
+    var g = c.createRadialGradient(-4, -2, 1, 0, 2, 16);
+    g.addColorStop(0, '#9be36f'); g.addColorStop(1, '#4aa83c');
+    ell(c, 0, 3, 11, 14, 0, g);
+    ell(c, 0, -9, 10, 8, 0, g);
+    ell(c, -4, 6, 2.2, 1.6, 0.3, 'rgba(40,90,30,.55)');
+    ell(c, 4, 9, 1.8, 1.4, -0.3, 'rgba(40,90,30,.55)');
+    ell(c, 1, 0, 1.6, 1.2, 0, 'rgba(40,90,30,.45)');
+    [-6, 6].forEach(function (ex) {
+      ell(c, ex, -13, 4.6, 4.6, 0, '#6cc955');
+      ell(c, ex, -13.6, 3.3, 3.3, 0, '#fff');
+      ell(c, ex, -14.3, 1.9, 1.9, 0, '#1a1a1a');
+      ell(c, ex - 0.8, -15, 0.7, 0.7, 0, '#fff');
+    });
+    c.restore();
+  }
+  function drawSparkles(sec) {
+    if (goldVis <= 0) return;
+    var cx = cw / 2 + x, cy = ch / 2 + y, c = sctx;
+    c.save();
+    c.globalAlpha = goldVis;
+    c.strokeStyle = '#fff6c2';
+    c.lineCap = 'round';
+    for (var i = 0; i < 7; i++) {
+      var a = sec * 2.2 + i * Math.PI * 2 / 7;
+      var r = BALL_R * (1.45 + 0.25 * Math.sin(sec * 5 + i));
+      var sx = cx + Math.cos(a) * r, sy = cy + Math.sin(a) * r;
+      var s = 3 + 3 * Math.abs(Math.sin(sec * 7 + i * 1.7));
+      c.lineWidth = 2;
+      c.beginPath(); c.moveTo(sx - s, sy); c.lineTo(sx + s, sy); c.moveTo(sx, sy - s); c.lineTo(sx, sy + s); c.stroke();
+    }
+    c.restore();
+  }
+
+  // =====================================================
+  //  効果音（その場で合成。ファイル不要）
+  // =====================================================
+  var AC = null, soundOn = true;
+  function audio() {
+    if (!soundOn) return null;
+    if (!AC) {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      try { AC = new C(); } catch (e) { return null; }
+    }
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  }
+  function tone(f, dur, type, vol, f2, delay) {
+    var a = audio();
+    if (!a) return;
+    var t0 = a.currentTime + (delay || 0);
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.2, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  function seq(notes, step, type, vol) {
+    notes.forEach(function (f, i) { tone(f, step * 1.6, type, vol, null, i * step); });
+  }
+  function sfx(name, n) {
+    switch (name) {
+      case 'coin':   tone(1046, 0.07, 'square', 0.10); tone(1568, 0.35, 'square', 0.09, null, 0.07); break;
+      case 'beep':   tone(660, 0.18, 'sine', 0.25); break;
+      case 'go':     tone(990, 0.1, 'square', 0.12); tone(1320, 0.4, 'square', 0.12, null, 0.09); break;
+      case 'hit':    var f = 520 * Math.pow(1.06, Math.min(n || 0, 18)); tone(f, 0.13, 'sine', 0.35, f * 2.2); tone(f * 1.5, 0.08, 'triangle', 0.12, null, 0.05); break;
+      case 'gold':   seq([1047, 1319, 1568, 2093, 2637], 0.06, 'triangle', 0.16); break;
+      case 'frog':   tone(320, 0.07, 'square', 0.12, 210); tone(320, 0.1, 'square', 0.12, 180, 0.1); break;
+      case 'miss':   tone(200, 0.18, 'triangle', 0.18, 110); break;
+      case 'combo':  seq([784, 988, 1175], 0.06, 'square', 0.08); break;
+      case 'event':  seq([660, 880], 0.08, 'triangle', 0.14); break;
+      case 'fever':  seq([784, 988, 1175, 1568], 0.08, 'square', 0.09); break;
+      case 'tick':   tone(1200, 0.05, 'square', 0.05); break;
+      case 'end':    seq([523, 659, 784, 1047, 784, 1047], 0.12, 'triangle', 0.16); break;
+      case 'nocoin': tone(220, 0.2, 'square', 0.08); break;
+      case 'slide':  tone(2600, 0.05, 'triangle', 0.06, 1900); break;
+      case 'drop':   tone(2100, 0.04, 'square', 0.05); tone(1500, 0.05, 'square', 0.05, null, 0.09); tone(140, 0.12, 'square', 0.12, 90, 0.2); break;
+    }
+  }
+
+  // =====================================================
+  //  ゲームの進行
+  // =====================================================
+  function mult() { return combo >= 10 ? 4 : combo >= 6 ? 3 : combo >= 3 ? 2 : 1; }
+  function fmt(n) { return Math.round(n).toLocaleString('ja-JP'); }
+  function setHud() {
+    scoreEl.textContent = fmt(score);
+    var t = Math.max(0, timeLeft);
+    timeEl.textContent = Math.ceil(t);
+    timeBar.style.width = (t / GAME_TIME * 100).toFixed(1) + '%';
+    timeBox.classList.toggle('hurry', state === 'go' && t <= FEVER_TIME);
+    comboEl.textContent = combo;
+    multEl.textContent = '×' + mult();
+    comboBox.classList.toggle('combo-hot', mult() >= 2);
+    creditEl.textContent = credits;
+    startBtn.disabled = credits <= 0 || state === 'count' || state === 'go';
+    startBtn.classList.toggle('ready', !startBtn.disabled);
+    coinBox.classList.toggle('hint', credits === 0 && (state === 'idle' || state === 'done'));
+  }
+  function idleMsg() {
+    msg.textContent = credits > 0 ? 'スタートを おしてね！' : '100えんを いれてね';
+  }
+  function banner(html) {
+    bannerEl.innerHTML = html;
+    bannerEl.classList.remove('show');
+    void bannerEl.offsetWidth;
+    bannerEl.classList.add('show');
+  }
+  function floatPt(px, py, html, cls) {
+    var d = document.createElement('div');
+    d.className = 'float-pt' + (cls ? ' ' + cls : '');
+    d.innerHTML = html;
+    d.style.left = Math.min(cw - 50, Math.max(50, px)) + 'px';
+    d.style.top = Math.max(40, py) + 'px';
+    stage.appendChild(d);
+    setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 1050);
+  }
+
+  function insertCoin() {
+    audio();   // 音はボタンを押したときに初めて鳴らせる
+    if (credits >= 9) { sfx('nocoin'); return; }
+    commitPendingEntry();
+    credits++;
+    sfx('coin');
+    if (state === 'idle' || state === 'done') idleMsg();
+    if (state === 'done') rNext.textContent = 'スタートを おしてね！';
+    setHud();
+  }
+
+  function startGame() {
+    if (state === 'count' || state === 'go') return;
+    if (credits <= 0) {
+      sfx('nocoin');
+      coinBox.classList.remove('shake'); void coinBox.offsetWidth; coinBox.classList.add('shake');
+      coinEl.classList.remove('nudge'); void coinEl.offsetWidth; coinEl.classList.add('nudge');
+      return;
+    }
+    commitPendingEntry();
+    credits--;
+    score = 0; combo = 0; maxCombo = 0; touchN = 0; missN = 0; fastest = Infinity;
+    timeLeft = GAME_TIME; feverOn = false; goldLeft = 0; rainLeft = 0;
+    resultEl.classList.add('hidden');
+    planEvents();
+    if (frog) frog = null;
+    startBtn.blur();
+    countdown();
+    setHud();
+  }
+
+  // 毎回ちがう順番・時間でイベントが起きるように、開始時にくじを引く
+  function planEvents() {
+    events = [];
+    var golds = 2 + (Math.random() < 0.5 ? 1 : 0);
+    var slots = [5, 11, 17];
+    for (var i = 0; i < golds; i++) events.push({ at: slots[i] + rnd(-1.5, 2.5), type: 'gold' });
+    events.push({ at: rnd(3, 8), type: 'frog' });
+    events.push({ at: rnd(13, 19), type: 'frog' });
+    if (Math.random() < 0.6) events.push({ at: rnd(8, 16), type: 'rain' });
+    events.sort(function (a, b) { return a.at - b.at; });
+  }
+  function runEvents() {
+    var elapsed = GAME_TIME - timeLeft;
+    while (events.length && elapsed >= events[0].at) {
+      var e = events.shift();
+      if (e.type === 'gold') {
+        goldLeft = GOLD_TIME;
+        banner('きんのボール！<small>タッチで 500てん</small>');
+        sfx('gold');
+      } else if (e.type === 'frog') {
+        if (!frog) { spawnFrog(); banner('カエルが きた！<small>タッチで 300てん</small>'); sfx('frog'); }
+      } else if (e.type === 'rain') {
+        rainLeft = 4.5;
+        stage.classList.add('rainy');
+        banner('あめが ふってきた！<small>ボールを よく みて！</small>');
+        sfx('event');
+      }
+    }
+  }
+
+  // 3・2・1 を大きく出し、カウントが終わった瞬間にボールを動かす
+  function showCount(text) {
+    countEl.textContent = text;
+    countEl.classList.remove('pop');
+    void countEl.offsetWidth;   // アニメーションを掛け直す
+    countEl.classList.add('pop');
+  }
+  function countdown() {
+    clearTimers();
+    resetBall();
+    setState('count');
+    stage.classList.add('count-on');
+    msg.textContent = 'ボールを よく みてね';
+    var n = COUNT_FROM;
+    (function tick() {
+      if (state !== 'count') return;
+      if (n > 0) {
+        showCount(String(n));
+        sfx('beep');
+        n--;
+        pauseTimer = setTimeout(tick, COUNT_STEP);
+      } else {
+        countEl.classList.remove('pop');
+        countEl.textContent = '';
+        banner('スタート！');
+        sfx('go');
+        msg.textContent = '';
+        go();
+      }
+    })();
+  }
+
+  function go() {
+    var speed = Math.max(300, Math.min(cw, 900) * 0.5); // px/s 画面幅に応じて
+    var ang = rnd(0, Math.PI * 2);
+    vx = Math.cos(ang) * speed;
+    vy = Math.sin(ang) * speed * 0.75;
+    setState('go');
+    stepBall(1 / 60);          // 最初の1フレーム分を即座に動かす
+    markTime = performance.now();
+    setHud();
+  }
+
+  // ゲーム中の時間・イベント（loop から毎フレーム呼ぶ。タブが裏に回ると止まる）
+  var lastSec = 99;
+  function gameTick(dt) {
+    timeLeft -= dt;
+    if (!feverOn && timeLeft <= FEVER_TIME) {
+      feverOn = true;
+      stage.classList.add('fever');
+      banner('ラストスパート！<small>とくてん 2ばい！</small>');
+      sfx('fever');
+    }
+    var s = Math.ceil(timeLeft);
+    if (s !== lastSec && s <= 5 && s > 0) sfx('tick');
+    lastSec = s;
+    runEvents();
+    if (timeLeft <= 0) { timeLeft = 0; endGame(); return; }
+    setHud();
+  }
+
+  // ボールに触れた: 点数を足して、別の方向へ跳ねさせる
+  function hitBall(px, py) {
+    var now = performance.now();
+    var rt = now - markTime;
+    markTime = now;
+    touchN++;
+    if (rt < fastest) fastest = rt;
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+
+    var isGold = goldLeft > 0;
+    var pts = 100, label = '';
+    if (rt < 400) { pts += 200; label = 'すごい！'; }
+    else if (rt < 700) { pts += 100; label = 'はやい！'; }
+    if (isGold) { pts = 500; label = 'きんのボール！'; goldLeft = 0; }
+    pts *= mult();
+    if (feverOn) pts *= 2;
+    score += pts;
+    floatPt(px, py - 20, '+' + fmt(pts) + (label ? '<small>' + label + '</small>' : ''), isGold ? 'gold' : '');
+    if (isGold) sfx('gold'); else sfx('hit', combo);
+    if (combo % 5 === 0) { banner(combo + 'れんぞく！<small>×' + mult() + ' ばい</small>'); sfx('combo'); }
+
+    var cx = cw / 2 + x, cy = ch / 2 + y;
+    var d = Math.sqrt((cx - px) * (cx - px) + (cy - py) * (cy - py));
+    var ang = d < 6 ? rnd(0, Math.PI * 2) : Math.atan2(cy - py, cx - px);  // 触った側の反対へ
+    ang += rnd(-0.6, 0.6);
+    var speed = Math.min(Math.sqrt(vx * vx + vy * vy) * 1.04, 950);
+    vx = Math.cos(ang) * speed;
+    vy = Math.sin(ang) * speed;
+    trail = [];   // 跳ねた後は、跳ねる前の位置では当たりにしない
+
+    addDrop(cx, cy, BALL_R * 1.3, isGold ? -3 : -2.2);   // 押し込まれて大きな波紋
+    sprayAt(cx, cy, isGold ? 30 : 18, isGold ? 1.4 : 1.1);
+    hitAt = now / 1000;
+    setHud();
+  }
+
+  function catchFrog(px, py) {
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+    var pts = 300 * mult() * (feverOn ? 2 : 1);
+    score += pts;
+    frog.caught = true;
+    floatPt(px, py - 20, '+' + fmt(pts) + '<small>ケロッ！</small>', 'frog');
+    sfx('frog');
+    frogDive();
+    setHud();
+  }
+
+  function missTap(px, py) {
+    missN++;
+    floatPt(px, py, combo >= 3 ? 'コンボ おしまい' : 'ざんねん', 'miss');
+    combo = 0;
+    addDrop(px, py, 9, 1.3);   // 指で水面をつついた波紋
+    sfx('miss');
+    setHud();
+  }
+
+  // 押した場所に葉があれば、押した向きへ流して回す。押した葉を返す
+  function pushPad(px, py) {
+    for (var i = pads.length - 1; i >= 0; i--) {
+      var p = pads[i];
+      var dx = p.x - px, dy = p.y - py;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d > p.s * 1.05) continue;
+      var nx, ny;
+      if (d < p.s * 0.15) { var a = rnd(0, Math.PI * 2); nx = Math.cos(a); ny = Math.sin(a); }
+      else { nx = dx / d; ny = dy / d; }
+      var power = rnd(140, 190) * (0.6 + 0.4 * d / p.s);   // 縁を押すほどよく流れる
+      p.vx += nx * power;
+      p.vy += ny * power;
+      // 中心からずれた所を押すと回る
+      p.va += ((dx * ny - dy * nx) >= 0 ? 1 : -1) * rnd(0.8, 1.8) * (d / p.s);
+      addDrop(px - nx * p.s * 0.2, py - ny * p.s * 0.2, p.s * 0.5, 0.7);   // 葉が沈んで戻る波紋
+      return p;
+    }
+    return null;
+  }
+
+  function onPointer(px, py) {
+    if (!cur) return;
+    if (state === 'go') {
+      if (touchesBall(px, py)) { hitBall(px, py); return; }
+      if (frogHit(px, py)) { catchFrog(px, py); return; }
+      if (pushPad(px, py)) return;   // 葉を押してもミスにはしない
+      missTap(px, py);
+      return;
+    }
+    // ゲームの外でも、カエル・葉・水面をさわって遊べる（点数なし）
+    if (frogHit(px, py)) { frog.caught = true; sfx('frog'); frogDive(); return; }
+    if (!pushPad(px, py)) addDrop(px, py, 9, 1.0);
+  }
+
+  // =====================================================
+  //  おしまい・結果・ランキング
+  // =====================================================
+  var TITLES = [
+    [14000, 'りゅうじん', 'いけの かみさま！ すごすぎる！'],
+    [9000, 'いけの ぬし', 'とっても つよい！'],
+    [5000, 'カッパ', 'すばやいね！'],
+    [2000, 'カエル', 'いい かんじ！'],
+    [0, 'おたまじゃくし', 'つぎは もっと いけるよ！']
+  ];
+  function titleOf(s) {
+    for (var i = 0; i < TITLES.length; i++) if (s >= TITLES[i][0]) return TITLES[i];
+    return TITLES[TITLES.length - 1];
+  }
+
+  function endGame() {
+    clearTimers();
+    setState('done');
+    vx = 0; vy = 0;
+    goldLeft = 0; rainLeft = 0;
+    sfx('end');
+    msg.textContent = '';
+    banner('おしまい！');
+
+    var t = titleOf(score);
+    rTitle.textContent = t[1];
+    rNote.textContent = '　' + t[2];
+    rTouch.textContent = touchN;
+    rCombo.textContent = maxCombo;
+    rFast.textContent = fastest < Infinity ? (fastest / 1000).toFixed(2) + 'びょう' : '-';
+    rTicket.textContent = Math.min(10, Math.max(1, Math.floor(score / 2000)));
+    rNext.textContent = credits > 0 ? 'スタートを おしてね！' : 'つぎの ひとは 100えんを いれてね';
+
+    // ランキングに入るか
+    var arr = loadRanking(), pos = arr.length;
+    for (var i = 0; i < arr.length; i++) if (score > arr[i].score) { pos = i; break; }
+    pendingEntry = null;
+    if (score > 0 && pos < RANK_MAX) {
+      pendingEntry = { score: score, title: t[1] };
+      entryMsg.textContent = 'ランキング ' + (pos + 1) + 'い！ なまえを いれてね';
+      entryName.value = '';
+      entryEl.classList.remove('hidden');
+    } else {
+      entryEl.classList.add('hidden');
+    }
+
+    // 点数をカウントアップで見せる
+    var shown = 0, target = score, steps = 30, k = 0;
+    rScore.textContent = '0';
+    setTimeout(function () {
+      resultEl.classList.remove('hidden');
+      var iv = setInterval(function () {
+        k++;
+        shown = Math.round(target * Math.min(1, k / steps));
+        rScore.textContent = fmt(shown);
+        if (k >= steps) clearInterval(iv);
+      }, 30);
+    }, 900);
+    setHud();
+  }
+
+  function loadRanking() {
+    try {
+      var raw = localStorage.getItem(RANK_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveRanking(arr) {
+    try { localStorage.setItem(RANK_KEY, JSON.stringify(arr)); } catch (e) { /* 保存できない環境では無視 */ }
+  }
+  function addRanking(name, entry) {
+    var arr = loadRanking();
+    var item = { name: name, score: entry.score, title: entry.title, date: new Date().toISOString(), id: Date.now() };
+    arr.push(item);
+    arr.sort(function (a, b) { return b.score - a.score; });
+    arr = arr.slice(0, RANK_MAX);
+    saveRanking(arr);
+    renderRanking(item.id);
+  }
+  // 名前を入れずに次の人がコインを入れたら「ななし」で登録する
+  function commitPendingEntry() {
+    if (!pendingEntry) return;
+    addRanking('ななし', pendingEntry);
+    pendingEntry = null;
+    entryEl.classList.add('hidden');
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function renderRanking(newId) {
+    var arr = loadRanking();
+    if (!arr.length) {
+      rankList.innerHTML = '<li class="none"><p class="empty">まだ だれも いないよ。いちばんに なろう！</p></li>';
+      return;
+    }
+    rankList.innerHTML = arr.map(function (e, i) {
+      return '<li' + (e.id === newId ? ' class="new"' : '') + '>' +
+        '<span class="pos' + (i < 3 ? ' p' + (i + 1) : '') + '">' + (i + 1) + '</span>' +
+        '<span class="rk-name">' + esc(e.name) + '<small>' + esc(e.title || '') + '</small></span>' +
+        '<span class="rk-pts">' + fmt(e.score) + '</span></li>';
+    }).join('');
+  }
+
+  // ---- 入力 ----
+  stage.addEventListener('pointerdown', function (e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (resultEl.contains(e.target)) return;   // 結果カードの上は池の操作にしない
+    var rect = stage.getBoundingClientRect();
+    onPointer(e.clientX - rect.left, e.clientY - rect.top);
+  });
+  // ---- 100えん硬貨: つまんで、いれぐちまで ひっぱって 入れる ----
+  var drag = null, inserting = false;
+  function coinCenter() { var r = coinEl.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+  function overSlot() {
+    var c = coinCenter(), r = slotEl.getBoundingClientRect(), m = 26;
+    return c.x > r.left - m && c.x < r.right + m && c.y > r.top - m && c.y < r.bottom + m;
+  }
+  function coinBack() {
+    coinEl.classList.remove('dragging');
+    coinEl.style.transform = '';
+    slotEl.classList.remove('near');
+  }
+  function coinInsert(dx, dy) {
+    if (inserting) return;
+    if (credits >= 9) { sfx('nocoin'); coinBack(); return; }
+    inserting = true;
+    audio();
+    // 元の位置から見た、いれぐちの真ん中
+    var c = coinCenter(), h = slotEl.querySelector('.slot-hole').getBoundingClientRect();
+    var ox = c.x - (dx || 0), oy = c.y - (dy || 0);
+    coinEl.style.setProperty('--tx', (h.left + h.width / 2 - ox) + 'px');
+    coinEl.style.setProperty('--ty', (h.top + h.height / 2 - oy) + 'px');
+    coinEl.classList.remove('dragging');
+    coinEl.style.transform = '';
+    coinEl.classList.add('into');
+    sfx('slide');
+    setTimeout(function () {
+      sfx('drop');
+      slotEl.classList.remove('gulp'); void slotEl.offsetWidth; slotEl.classList.add('gulp');
+      slotEl.classList.remove('near');
+    }, 380);
+    setTimeout(function () {
+      insertCoin();
+      coinEl.classList.remove('into');
+      coinEl.classList.remove('appear'); void coinEl.offsetWidth; coinEl.classList.add('appear');   // つぎの硬貨が出てくる
+      inserting = false;
+    }, 700);
+  }
+  coinEl.addEventListener('pointerdown', function (e) {
+    if (inserting || (e.button !== undefined && e.button !== 0)) return;
+    e.preventDefault();
+    audio();
+    try { coinEl.setPointerCapture(e.pointerId); } catch (err) { /* 古いブラウザ */ }
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: 0 };
+    coinEl.classList.remove('appear', 'nudge');
+    coinEl.classList.add('dragging');
+    coinEl.style.transform = 'scale(1.12)';
+  });
+  coinEl.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.dx = e.clientX - drag.sx;
+    drag.dy = e.clientY - drag.sy;
+    drag.moved = Math.max(drag.moved, Math.hypot(drag.dx, drag.dy));
+    coinEl.style.transform = 'translate(' + drag.dx + 'px,' + drag.dy + 'px) scale(1.12)';
+    slotEl.classList.toggle('near', overSlot());
+  });
+  function coinRelease(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var d = drag;
+    drag = null;
+    if (overSlot()) { coinInsert(d.dx, d.dy); return; }
+    coinBack();
+    if (d.moved < 8) { coinEl.classList.remove('nudge'); void coinEl.offsetWidth; coinEl.classList.add('nudge'); }   // 「ひっぱってね」の合図
+  }
+  coinEl.addEventListener('pointerup', coinRelease);
+  coinEl.addEventListener('pointercancel', function (e) { if (drag && e.pointerId === drag.id) { drag = null; coinBack(); } });
+  coinEl.addEventListener('keydown', function (e) {   // キーボードでも入れられる
+    if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); e.stopPropagation(); coinInsert(0, 0); }
+  });
+  startBtn.addEventListener('click', function () { audio(); startGame(); });
+  soundBtn.addEventListener('click', function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = 'おと：' + (soundOn ? 'オン' : 'オフ');
+    if (soundOn) sfx('coin');
+  });
+  entryForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!pendingEntry) return;
+    var name = entryName.value.trim().slice(0, 6) || 'ななし';
+    addRanking(name, pendingEntry);
+    pendingEntry = null;
+    entryEl.classList.add('hidden');
+    rNext.textContent = 'ランキングに のったよ！ ' + (credits > 0 ? 'スタートを おしてね' : 'つぎの ひとは 100えんを いれてね');
+    sfx('combo');
+  });
+  clearBtn.addEventListener('click', function () {
+    if (confirm('ランキングを けしますか？（お店の人むけ）')) { saveRanking([]); renderRanking(); }
+  });
+  window.addEventListener('keydown', function (e) {
+    if (document.activeElement === entryName) return;
+    if (document.activeElement === coinEl) return;
+    if (e.code === 'KeyC') coinInsert(0, 0);       // お店の人むけ: C でコイン
+    if (e.code === 'Enter' || e.code === 'Space') {
+      if (state === 'idle' || state === 'done') { e.preventDefault(); audio(); startGame(); }
+    }
+  });
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+
+  try { GL = initGL(); } catch (e) { GL = null; }
+  setState('idle');
+  resize();
+  placeBall();
+  idleMsg();
+  setHud();
+  renderRanking();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
