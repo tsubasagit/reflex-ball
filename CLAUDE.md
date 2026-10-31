@@ -4,6 +4,10 @@
 - `index.html` 1 枚で完結（HTML / CSS / JS / GLSL をすべて同梱、依存ライブラリなし、ビルド不要）
 - `SERVICE_SPEC.md` に仕様。機能を変えたらこちらも更新する
 
+## 公開
+- リポジトリ: https://github.com/tsubasagit/reflex-ball （公開）
+- GitHub Pages: https://tsubasagit.github.io/reflex-ball/ （main の直下をそのまま配信。`.nojekyll` あり）。main に push すると 1 分ほどで反映される
+
 ## 動かし方
 ブラウザで `index.html` を開くだけ。ローカルサーバーを立てるなら:
 
@@ -40,6 +44,7 @@ python -m http.server 8997
 
 ## 進行の実装メモ
 - 状態は `idle | count | go | done` の 4 つ。`setState()` が `.stage` の class も切り替える（WebGL 使用時は `has-gl` を付け足す）
+- コイン: 硬貨 `#coin` を pointerdown でつかみ、pointerup の時に `overSlot()`（いれぐちの周り 26px まで）なら `coinInsert()` が吸い込みアニメのあと `insertCoin()` を呼ぶ。キーボードは硬貨にフォーカスして Enter、お店の人は C
 - 流れ: `insertCoin()` → `startGame()`（クレジット -1、`planEvents()` でイベントのくじ）→ `countdown()` → `go()` → 毎フレーム `gameTick()` → `endGame()`
 - ゲーム内の時間 `timeLeft` は `loop()` の dt で減らす。setTimeout を使わないので、タブが裏に回るとゲームも止まる
 - イベントは `events`（経過秒 `at` と種類）を開始時に作り、`runEvents()` が時刻になったものから実行する
